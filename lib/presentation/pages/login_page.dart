@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';  
 import '../providers/auth_provider.dart';  
 import 'dashboard_page.dart';
-import '../widgets/liquid_background.dart';
-import '../widgets/modern_text_field.dart';
-import '../widgets/forest_logo.dart';
+import '../widgets/login/liquid_background.dart';
+import '../widgets/login/modern_text_field.dart';
+import '../widgets/login/forest_logo.dart';
 import 'package:flutter_animate/flutter_animate.dart';
   
 class LoginPage extends StatefulWidget {  

@@ -1,4 +1,4 @@
-import 'package:app_ipx_esp_ddd/presentation/pages/dashboard/widgets/expandible_menu.dart';
+import 'package:app_ipx_esp_ddd/presentation/widgets/dashboard/expandible_menu.dart';
 import 'package:app_ipx_esp_ddd/presentation/pages/login_page.dart';
 import 'package:app_ipx_esp_ddd/presentation/providers/view_provider.dart';
 import 'package:app_ipx_esp_ddd/domain/models/vista.dart';
