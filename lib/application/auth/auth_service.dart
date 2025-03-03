@@ -32,4 +32,8 @@ class AuthService {
       throw Exception('Error al limpiar datos de autenticación: $e');
     }
   }
+
+  Future<Login?> getUserData() {
+  return authRepository.getUserData();
+}
 }

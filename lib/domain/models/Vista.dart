@@ -1,7 +1,3 @@
-// To parse this JSON data, do
-//
-//     final vista = vistaFromJson(jsonString);
-
 import 'dart:convert';
 
 List<Vista> vistaFromJson(String str) => List<Vista>.from(json.decode(str).map((x) => Vista.fromJson(x)));
@@ -23,7 +19,7 @@ class Vista {
     String label;
     int tieneHijo;
     String? routerLink;
-    Icon? icon;
+    String? icon;
 
     Vista({
         required this.codVista,
@@ -54,11 +50,13 @@ class Vista {
         autorizar: json["autorizar"],
         audUsuarioI: json["audUsuarioI"],
         fila: json["fila"],
-        items: json["items"] == null ? [] : List<Vista>.from(json["items"]!.map((x) => Vista.fromJson(x))),
+        items: json["items"] == null 
+            ? [] 
+            : List<Vista>.from(json["items"].map((x) => Vista.fromJson(x))),
         label: json["label"],
         tieneHijo: json["tieneHijo"],
         routerLink: json["routerLink"],
-        icon: iconValues.map[json["icon"]]!,
+        icon: json["icon"],
     );
 
     Map<String, dynamic> toJson() => {
@@ -72,30 +70,12 @@ class Vista {
         "autorizar": autorizar,
         "audUsuarioI": audUsuarioI,
         "fila": fila,
-        "items": items == null ? [] : List<dynamic>.from(items!.map((x) => x.toJson())),
+        "items": items == null 
+            ? [] 
+            : List<dynamic>.from(items!.map((x) => x.toJson())),
         "label": label,
         "tieneHijo": tieneHijo,
         "routerLink": routerLink,
-        "icon": iconValues.reverse[icon],
+        "icon": icon,
     };
-}
-
-enum Icon {
-    PI_PI_CIRCLE
-}
-
-final iconValues = EnumValues({
-    "pi pi-circle": Icon.PI_PI_CIRCLE
-});
-
-class EnumValues<T> {
-    Map<String, T> map;
-    late Map<T, String> reverseMap;
-
-    EnumValues(this.map);
-
-    Map<T, String> get reverse {
-            reverseMap = map.map((k, v) => MapEntry(v, k));
-            return reverseMap;
-    }
 }
