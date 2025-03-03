@@ -1,5 +1,7 @@
 
 
+import 'dart:convert';
+
 import 'package:app_ipx_esp_ddd/core/constants/api_constants.dart';
 import 'package:app_ipx_esp_ddd/core/utils/token_utils.dart';
 import 'package:app_ipx_esp_ddd/domain/models/Login.dart';
@@ -28,7 +30,8 @@ class AuthRepositoryImpl implements AuthRepository {
         
       // Guardar token  
       await secureStorage.write(key: 'token', value: login.token);  
-      await secureStorage.write(key: 'bearer', value: login.bearer);  
+      await secureStorage.write(key: 'bearer', value: login.bearer);
+      await secureStorage.write(key: 'user', value: jsonEncode(login));    
         
       return login;  
     } catch (e) {  
@@ -70,5 +73,11 @@ class AuthRepositoryImpl implements AuthRepository {
     }  
       
     return true;  
+  }
+  
+  @override
+  Future<Login> getUserData() {
+    // TODO: implement getUserData
+    throw UnimplementedError();
   }  
 }

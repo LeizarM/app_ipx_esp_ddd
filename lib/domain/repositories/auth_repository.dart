@@ -5,5 +5,6 @@ abstract class AuthRepository {
   Future<bool> isLoggedIn();  
   Future<void> logout();  
   Future<String?> getToken();  
+  Future<Login> getUserData();  
   Future<bool> refreshTokenIfNeeded();  
 }

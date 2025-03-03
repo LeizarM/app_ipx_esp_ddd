@@ -1,7 +1,6 @@
 import 'package:app_ipx_esp_ddd/presentation/pages/login_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../domain/models/menu_item.dart';
 import '../providers/auth_provider.dart';
 
 class DashboardPage extends StatefulWidget {
@@ -14,25 +13,8 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   String _selectedOption = 'Inicio';
   
-  // Ejemplo de ítems del menú - en producción deberían venir de un servicio
-  final List<CustomMenuItem> _menuItems = [
-    CustomMenuItem(
-      title: 'Inicio',
-      icon: Icons.home,
-      route: '/dashboard',
-    ),
-    CustomMenuItem(
-      title: 'Perfil',
-      icon: Icons.person,
-      route: '/profile',
-    ),
-    CustomMenuItem(
-      title: 'Configuración',
-      icon: Icons.settings,
-      route: '/settings',
-    ),
-    // Aquí se añadirían más opciones según el rol del usuario
-  ];
+    
+  
 
   @override
   Widget build(BuildContext context) {
@@ -66,26 +48,7 @@ class _DashboardPageState extends State<DashboardPage> {
                 color: Theme.of(context).primaryColor,
               ),
             ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _menuItems.length,
-                itemBuilder: (context, index) {
-                  final item = _menuItems[index];
-                  return ListTile(
-                    leading: Icon(item.icon),
-                    title: Text(item.title),
-                    selected: _selectedOption == item.title,
-                    onTap: () {
-                      setState(() {
-                        _selectedOption = item.title;
-                      });
-                      Navigator.pop(context); // Cierra el drawer
-                      // Aquí se implementaría la navegación real
-                    },
-                  );
-                },
-              ),
-            ),
+            
           ],
         ),
       ),
