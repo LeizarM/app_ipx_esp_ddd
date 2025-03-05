@@ -6,6 +6,7 @@ class ModernTextField extends StatefulWidget {
   final String? Function(String?)? validator;
   final bool obscureText;
   final IconData prefixIcon;
+  final bool isPassword;
 
   const ModernTextField({
     super.key,
@@ -14,6 +15,7 @@ class ModernTextField extends StatefulWidget {
     this.validator,
     this.obscureText = false,
     required this.prefixIcon,
+    this.isPassword = false,
   });
 
   @override
@@ -26,10 +28,12 @@ class _ModernTextFieldState extends State<ModernTextField>
   late AnimationController _animationController;
   late Animation<double> _animation;
   bool _isFocused = false;
+  bool _obscureText = true;
 
   @override
   void initState() {
     super.initState();
+    _obscureText = widget.obscureText;
     _animationController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 200),
@@ -54,18 +58,17 @@ class _ModernTextFieldState extends State<ModernTextField>
       animation: _animation,
       builder: (context, child) {
         return Container(
-          margin: const EdgeInsets.symmetric(vertical: 8),
+          margin: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: Colors.grey.shade50,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
                 color: _isFocused
-                    // ignore: deprecated_member_use
-                    ? Theme.of(context).primaryColor.withOpacity(0.3)
+                    ? const Color(0xFF6B46C1).withOpacity(0.2)
                     : Colors.black12,
-                blurRadius: 10,
-                offset: const Offset(0, 5),
+                blurRadius: 8,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
@@ -82,14 +85,28 @@ class _ModernTextFieldState extends State<ModernTextField>
             },
             child: TextFormField(
               controller: widget.controller,
-              obscureText: widget.obscureText,
+              obscureText: widget.isPassword ? _obscureText : widget.obscureText,
               validator: widget.validator,
+              style: const TextStyle(fontSize: 16),
               decoration: InputDecoration(
                 labelText: widget.label,
                 prefixIcon: Icon(
                   widget.prefixIcon,
-                  color: _isFocused ? Theme.of(context).primaryColor : Colors.grey,
+                  color: _isFocused ? const Color(0xFF6B46C1) : Colors.grey,
                 ),
+                suffixIcon: widget.isPassword
+                    ? IconButton(
+                        icon: Icon(
+                          _obscureText ? Icons.visibility_off : Icons.visibility,
+                          color: _isFocused ? const Color(0xFF6B46C1) : Colors.grey,
+                        ),
+                        onPressed: () {
+                          setState(() {
+                            _obscureText = !_obscureText;
+                          });
+                        },
+                      )
+                    : null,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(16),
                   borderSide: BorderSide.none,
@@ -100,8 +117,10 @@ class _ModernTextFieldState extends State<ModernTextField>
                   horizontal: 20,
                 ),
                 labelStyle: TextStyle(
-                  color: _isFocused ? Theme.of(context).primaryColor : Colors.grey,
+                  color: _isFocused ? const Color(0xFF6B46C1) : Colors.grey,
                 ),
+                filled: true,
+                fillColor: Colors.transparent,
               ),
             ),
           ),
