@@ -10,9 +10,9 @@ class AuthMiddleware extends StatefulWidget {
   final Widget child;
 
   const AuthMiddleware({
-    Key? key,
+    super.key,
     required this.child,
-  }) : super(key: key);
+  });
 
   @override
   State<AuthMiddleware> createState() => _AuthMiddlewareState();

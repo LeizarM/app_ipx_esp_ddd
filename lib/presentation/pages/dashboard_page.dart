@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 
 class DashboardPage extends StatefulWidget {
-  const DashboardPage({Key? key}) : super(key: key);
+  const DashboardPage({super.key});
   
   // Override para asegurar que el widget se considera constante
   @override
@@ -24,7 +24,7 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   String _selectedOption = 'Inicio';
-  int _selectedIndex = 0;
+  final int _selectedIndex = 0;
   Vista? _selectedMenuItem;
   String _currentContent = 'Bienvenido al Dashboard';
   

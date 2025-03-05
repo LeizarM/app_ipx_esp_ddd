@@ -9,13 +9,13 @@ class ExpandableMenu extends StatefulWidget {
   final bool useBlurEffects;
   
   const ExpandableMenu({
-    Key? key, 
+    super.key, 
     required this.menuItems,
     required this.onItemSelected,
     this.selectedItemId,
     this.useGradients = true,
     this.useBlurEffects = false,
-  }) : super(key: key);
+  });
 
   @override
   State<ExpandableMenu> createState() => _ExpandableMenuState();
@@ -23,14 +23,14 @@ class ExpandableMenu extends StatefulWidget {
 
 class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStateMixin {
   // Mapa para controlar qué elementos están expandidos
-  Map<int, bool> _expandedItems = {};
+  final Map<int, bool> _expandedItems = {};
   
   // Para efectos de hover
   int? _hoveredItemId;
   
   // Controladores de animación
   late final AnimationController _expandController;
-  Map<int, AnimationController> _itemAnimations = {};
+  final Map<int, AnimationController> _itemAnimations = {};
   
   @override
   void initState() {
@@ -52,7 +52,9 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
   @override
   void dispose() {
     _expandController.dispose();
-    _itemAnimations.values.forEach((controller) => controller.dispose());
+    for (var controller in _itemAnimations.values) {
+      controller.dispose();
+    }
     super.dispose();
   }
 
@@ -344,7 +346,7 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
                                 ? primaryColor.withOpacity(0.1)
                                 : isHovered
                                     ? primaryColor.withOpacity(0.05)
-                                    : colorScheme.surfaceVariant.withOpacity(0.3),
+                                    : colorScheme.surfaceContainerHighest.withOpacity(0.3),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Center(
@@ -403,7 +405,7 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
                           decoration: BoxDecoration(
                             color: isHovered || isSelected 
                                 ? primaryColor.withOpacity(0.1) 
-                                : colorScheme.surfaceVariant.withOpacity(0.3),
+                                : colorScheme.surfaceContainerHighest.withOpacity(0.3),
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: AnimatedRotation(

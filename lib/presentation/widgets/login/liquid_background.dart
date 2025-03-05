@@ -8,11 +8,11 @@ class LiquidBackground extends StatelessWidget {
   final Color color2;
 
   const LiquidBackground({
-    Key? key,
+    super.key,
     required this.child,
     this.color1 = const Color(0xFF1565C0),
     this.color2 = const Color(0xFF0D47A1),
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -35,10 +35,10 @@ class AnimatedBackground extends StatelessWidget {
   final Color color2;
 
   const AnimatedBackground({
-    Key? key,
+    super.key,
     required this.color1,
     required this.color2,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -63,6 +63,8 @@ class AnimatedBackground extends StatelessWidget {
 }
 
 class AnimatedWaves extends StatelessWidget {
+  const AnimatedWaves({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MirrorAnimationBuilder<double>(

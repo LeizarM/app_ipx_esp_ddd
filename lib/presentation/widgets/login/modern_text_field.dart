@@ -8,13 +8,13 @@ class ModernTextField extends StatefulWidget {
   final IconData prefixIcon;
 
   const ModernTextField({
-    Key? key,
+    super.key,
     required this.controller,
     required this.label,
     this.validator,
     this.obscureText = false,
     required this.prefixIcon,
-  }) : super(key: key);
+  });
 
   @override
   // ignore: library_private_types_in_public_api

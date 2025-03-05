@@ -32,7 +32,6 @@ class PurpleGreenTheme {
           secondary: green,
           secondaryContainer: darkGreen,
           surface: Colors.white,
-          background: Colors.white,
           error: errorColor,
         ),
         scaffoldBackgroundColor: Colors.white,

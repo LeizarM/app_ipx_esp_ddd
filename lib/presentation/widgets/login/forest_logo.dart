@@ -6,11 +6,11 @@ class ForestLogo extends StatelessWidget {
   final Color secondaryColor;
 
   const ForestLogo({
-    Key? key,
+    super.key,
     this.size = 120.0,
     this.primaryColor = Colors.white,
     this.secondaryColor = const Color(0xFF81C784),
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

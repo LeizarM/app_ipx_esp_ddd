@@ -8,7 +8,7 @@ import '../widgets/login/forest_logo.dart';
 import 'package:flutter_animate/flutter_animate.dart';
   
 class LoginPage extends StatefulWidget {  
-  const LoginPage({Key? key}) : super(key: key);  
+  const LoginPage({super.key});  
  
   @override  
   _LoginPageState createState() => _LoginPageState();  

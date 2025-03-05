@@ -62,7 +62,7 @@ class MenuDecoration {
           ? colorScheme.primary.withOpacity(0.1)
           : isHovered
               ? colorScheme.primary.withOpacity(0.05)
-              : colorScheme.surfaceVariant.withOpacity(0.3),
+              : colorScheme.surfaceContainerHighest.withOpacity(0.3),
       borderRadius: BorderRadius.circular(6),
     );
   }
