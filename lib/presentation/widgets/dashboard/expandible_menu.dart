@@ -1,5 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:app_ipx_esp_ddd/domain/models/vista.dart';
+import 'package:flutter/material.dart';
+
+// Add import for ItemsViewStock
+import 'package:app_ipx_esp_ddd/presentation/pages/items_view_stock/items_view_stock.dart';
 
 class ExpandableMenu extends StatefulWidget {
   final List<Vista> menuItems;
@@ -22,31 +25,119 @@ class ExpandableMenu extends StatefulWidget {
 }
 
 class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStateMixin {
-  // Mapa para controlar qué elementos están expandidos
+  // Map to track expanded items
   final Map<int, bool> _expandedItems = {};
   
-  // Para efectos de hover
+  // For hover effects
   int? _hoveredItemId;
   
-  // Controladores de animación
+  // Animation controllers
   late final AnimationController _expandController;
   final Map<int, AnimationController> _itemAnimations = {};
+  
+  // Filtered menu items
+  late List<Vista> _filteredMenuItems;
+  
+  // Map of available pages in the project
+  final Map<String, bool> _availablePages = {
+    'tven_ventas/VentasView': true, // This redirects to ItemsViewStock
+    // Add all your available pages here
+    // Format: 'page_route': true,
+  };
   
   @override
   void initState() {
     super.initState();
     
-    // Inicializar controlador principal
+    // Filter menu items without valid routes
+    _filteredMenuItems = _filterValidMenuItems(widget.menuItems);
+    
+    // Initialize main controller
     _expandController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 200),
     );
     
-    // Expandir automáticamente los items raíz (nivel 1)
+    // Auto-expand root items (level 1)
     _autoExpandRootItems();
     
-    // Auto-expandir elementos que contienen el item seleccionado
+    // Auto-expand items containing the selected item
     _autoExpandParents();
+  }
+  
+  // Method to filter menu items without valid routes or existing pages
+  List<Vista> _filterValidMenuItems(List<Vista> items) {
+    // List to store filtered items
+    List<Vista> validItems = [];
+    
+    for (var item in items) {
+      if (item.items != null && item.items!.isNotEmpty) {
+        // Filter children first
+        List<Vista> validChildren = _filterValidMenuItems(item.items!);
+        
+        // Include this item only if it has valid children or a valid route with existing page
+        if (validChildren.isNotEmpty || _hasValidRouteAndPage(item)) {
+          // Create a copy of the item with filtered children
+          Vista newItem = Vista(
+            codVista: item.codVista,
+            codVistaPadre: item.codVistaPadre,
+            titulo: item.titulo,
+            descripcion: item.descripcion,
+            imagen: item.imagen,
+            autorizar: item.autorizar,
+            audUsuarioI: item.audUsuarioI,
+            fila: item.fila,
+            tieneHijo: item.tieneHijo,
+            routerLink: item.routerLink,
+            label: item.label,
+            icon: item.icon,
+            direccion: item.direccion,
+            esRaiz: item.esRaiz,
+            // Assign filtered children
+            items: validChildren,
+          );
+          validItems.add(newItem);
+        }
+      } else if (_hasValidRouteAndPage(item)) {
+        // This is a leaf item with a valid route and existing page
+        validItems.add(item);
+      }
+    }
+    
+    return validItems;
+  }
+  
+  // Check if an item has a valid route and corresponding page
+  bool _hasValidRouteAndPage(Vista item) {
+    // First check if the route is valid
+    if (item.direccion == null || item.direccion!.isEmpty) {
+      return false;
+    }
+    
+    // Then check if the page exists in our available pages map
+    return _pageExists(item.direccion!);
+  }
+  
+  // Check if a page exists in the project
+  bool _pageExists(String route) {
+    // Check in our map of available pages
+    return _availablePages.containsKey(route);
+  }
+  
+  // Handle navigation with special redirection
+  void _handleNavigation(BuildContext context, Vista item) {
+    // Check if it's the special route
+    if (item.direccion == 'tven_ventas/VentasView') {
+      // Redirect to ItemsViewStock
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const ItemsViewStock(),
+        ),
+      );
+    } else {
+      // Normal navigation
+      widget.onItemSelected(item);
+    }
   }
   
   @override
@@ -58,7 +149,7 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
     super.dispose();
   }
 
-  // Obtener o crear un controlador de animación para un ítem específico
+  // Get or create animation controller for a specific item
   AnimationController _getItemController(int itemId) {
     if (!_itemAnimations.containsKey(itemId)) {
       _itemAnimations[itemId] = AnimationController(
@@ -71,9 +162,10 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
 
   void _autoExpandRootItems() {
     for (var item in widget.menuItems) {
-      // Expandir solo los elementos de nivel superior
+      // Expand only top-level elements
       if (item.esRaiz == 1) {
-        _expandedItems[item.codVista] = true;
+        // Use null-safe access with nullish coalescing operator
+        _expandedItems[item.codVista ?? 0] = true;
       }
     }
   }
@@ -88,12 +180,12 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
   
   void _autoExpandParents() {
     if (widget.selectedItemId != null) {
-      // Buscar y expandir padres del item seleccionado
+      // Find and expand parents of the selected item
       _expandParentOf(widget.menuItems, widget.selectedItemId!);
     }
   }
   
-  // Función recursiva para encontrar y expandir los padres del item seleccionado
+  // Recursive function to find and expand parents of the selected item
   bool _expandParentOf(List<Vista> items, int targetId) {
     for (var item in items) {
       if (item.codVista == targetId) {
@@ -103,8 +195,9 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
       if (item.items != null && item.items!.isNotEmpty) {
         bool foundInChildren = _expandParentOf(item.items!, targetId);
         if (foundInChildren) {
-          // Si se encontró el objetivo en los hijos, expandir este item
-          _expandedItems[item.codVista] = true;
+          // If target found in children, expand this item
+          // Use null-safe access
+          _expandedItems[item.codVista ?? 0] = true;
           return true;
         }
       }
@@ -116,6 +209,11 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    
+    // If there are no valid items after filtering, return an empty container
+    if (_filteredMenuItems.isEmpty) {
+      return Container();
+    }
     
     return Container(
       decoration: BoxDecoration(
@@ -135,12 +233,14 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
           shrinkWrap: true,
           physics: const ClampingScrollPhysics(),
           padding: const EdgeInsets.symmetric(vertical: 8.0),
-          itemCount: widget.menuItems.length,
+          // Use filtered list instead of widget.menuItems
+          itemCount: _filteredMenuItems.length,
           itemBuilder: (context, index) {
-            final item = widget.menuItems[index];
+            final item = _filteredMenuItems[index];
             
-            // Crear una animación de entrada para cada ítem del menú
-            final itemController = _getItemController(item.codVista);
+            // Create entrance animation for each menu item
+            // Use null-safe access
+            final itemController = _getItemController(item.codVista ?? 0);
             if (!itemController.isCompleted) {
               Future.delayed(Duration(milliseconds: 30 * index), () {
                 if (mounted) itemController.forward();
@@ -171,20 +271,21 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
   
   Widget _buildMenuItem(Vista item, int level) {
     bool hasChildren = item.items != null && item.items!.isNotEmpty;
-    bool isExpanded = _expandedItems[item.codVista] ?? false;
+    // Use null-safe access with nullish coalescing operator
+    bool isExpanded = _expandedItems[item.codVista ?? 0] ?? false;
     bool isSelected = widget.selectedItemId == item.codVista;
     bool isHovered = _hoveredItemId == item.codVista;
     
-    // Determinar colores según tema
+    // Determine colors based on theme
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     
-    // Crear paleta de colores dinámica
+    // Create dynamic color palette
     final selectedBgColor = colorScheme.primaryContainer.withOpacity(0.15);
     final hoveredBgColor = colorScheme.primaryContainer.withOpacity(0.08);
     final primaryColor = colorScheme.primary;
     
-    // Efectos de gradiente (opcional)
+    // Gradient effects (optional)
     Gradient? itemGradient;
     if (widget.useGradients) {
       if (isSelected && !hasChildren) {
@@ -208,16 +309,16 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
       }
     }
     
-    // Determinar qué icono usar basado en la estructura del elemento
+    // Determine which icon to use based on the item structure
     IconData iconData = level == 0
-        ? _getCategoryIcon(item.label)
+        ? _getCategoryIcon(item.label ?? "")
         : hasChildren
             ? Icons.folder
             : item.icon != null && item.icon!.isNotEmpty
                 ? _getIconForString(item.icon!)
                 : Icons.description_outlined;
     
-    // Determinar colores de iconos y texto
+    // Determine icon and text colors
     final iconColor = isSelected
         ? primaryColor
         : hasChildren
@@ -230,13 +331,13 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
             ? colorScheme.onSurface
             : colorScheme.onSurface.withOpacity(0.9);
     
-    // Aplicar indentación basada en el nivel
+    // Apply indentation based on level
     double leftPadding = 16.0 * level;
     
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Encabezado de categoría para elementos de nivel 0
+        // Category header for level 0 elements
         if (level == 0)
           Padding(
             padding: const EdgeInsets.fromLTRB(16.0, 16.0, 16.0, 12.0),
@@ -263,7 +364,7 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
                   ),
                   const SizedBox(width: 10),
                   Text(
-                    item.label.toUpperCase(),
+                    (item.label ?? "").toUpperCase(),
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -276,7 +377,7 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
             ),
           ),
         
-        // Elemento del menú con efectos mejorados
+        // Menu item with enhanced effects
         MouseRegion(
           onEnter: (_) => setState(() => _hoveredItemId = item.codVista),
           onExit: (_) => setState(() => _hoveredItemId = null),
@@ -321,10 +422,19 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
                 onTap: () {
                   if (hasChildren) {
                     setState(() {
-                      _expandedItems[item.codVista] = !isExpanded;
+                      // Use null-safe access
+                      _expandedItems[item.codVista ?? 0] = !isExpanded;
                     });
                   } else {
-                    widget.onItemSelected(item);
+                    // Log to console which route/link is being clicked
+                    print('===== MENU ITEM CLICKED =====');
+                    print('Title: ${item.label}');
+                    print('ID: ${item.codVista}');
+                    print('Route/Link: ${item.direccion ?? "No route defined"}');
+                    print('============================');
+                    
+                    // Use the new navigation method
+                    _handleNavigation(context, item);
                   }
                 },
                 child: Padding(
@@ -336,7 +446,7 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
                     children: [
                       const SizedBox(width: 12.0),
                       
-                      // Icono con contenedor decorativo
+                      // Decorative icon container
                       if (level > 0)
                         Container(
                           width: 28,
@@ -361,7 +471,7 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
                       if (level > 0) 
                         const SizedBox(width: 12.0),
                       
-                      // Título del elemento con animación sutil
+                      // Item title with subtle animation
                       Expanded(
                         child: AnimatedDefaultTextStyle(
                           duration: const Duration(milliseconds: 200),
@@ -373,11 +483,11 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
                             color: textColor,
                             letterSpacing: isSelected ? 0.2 : 0.1,
                           ),
-                          child: Text(item.label),
+                          child: Text(item.label ?? ""),
                         ),
                       ),
                       
-                      // Contador o badge (ejemplo)
+                      // Counter or badge (example)
                       if (!hasChildren && level > 0 && _shouldShowBadge(item))
                         Container(
                           margin: const EdgeInsets.only(right: 8),
@@ -396,7 +506,7 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
                           ),
                         ),
                       
-                      // Indicador para elementos expandibles
+                      // Indicator for expandable items
                       if (hasChildren)
                         AnimatedContainer(
                           duration: const Duration(milliseconds: 300),
@@ -421,7 +531,7 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
                             ),
                           ),
                         )
-                      // Indicador para elementos navegables
+                      // Indicator for navigable items
                       else if (level > 0 && !_shouldShowBadge(item))
                         Container(
                           width: 6,
@@ -444,7 +554,7 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
           ),
         ),
         
-        // Elementos hijos con animación mejorada
+        // Child elements with improved animation
         if (hasChildren)
           AnimatedSize(
             duration: const Duration(milliseconds: 300),
@@ -459,14 +569,8 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
                       itemBuilder: (context, index) {
                         final childItem = item.items![index];
                         
-                        // Animar la entrada de los items hijos
+                        // Animate child items entry
                         final delay = index * 50;
-                        final animation = TweenSequence([
-                          TweenSequenceItem(
-                            tween: Tween<double>(begin: 0.0, end: 1.0),
-                            weight: 0.7,
-                          ),
-                        ]);
                         
                         return FutureBuilder(
                           future: Future.delayed(Duration(milliseconds: delay)),
@@ -485,7 +589,7 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
                 : const SizedBox.shrink(),
           ),
           
-        // Separador con animación
+        // Animated separator
         if (level == 0)
           TweenAnimationBuilder(
             tween: ColorTween(
@@ -519,19 +623,19 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
     );
   }
   
-  // Método para determinar si mostrar un badge en un ítem
+  // Method to determine if showing a badge on an item
   bool _shouldShowBadge(Vista item) {
-    // Simplemente como ejemplo - puedes implementar tu lógica real aquí
+    // Example - implement your actual logic here
     return false;
   }
   
-  // Método para obtener el conteo del badge
+  // Method to get badge count
   String _getBadgeCount(Vista item) {
-    // Ejemplo - implementa tu lógica real
+    // Example - implement your actual logic
     return "3";
   }
   
-  // Función para asignar iconos basados en el nombre de la categoría
+  // Function to assign icons based on category name
   IconData _getCategoryIcon(String category) {
     final lowerCategory = category.toLowerCase();
     
@@ -576,7 +680,7 @@ class _ExpandableMenuState extends State<ExpandableMenu> with TickerProviderStat
     return Icons.folder_outlined;
   }
   
-  // Función para mapear strings de iconos a IconData
+  // Function to map icon strings to IconData
   IconData _getIconForString(String iconStr) {
     if (iconStr.contains("pi-circle")) {
       return Icons.radio_button_unchecked;

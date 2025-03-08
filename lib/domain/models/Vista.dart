@@ -5,38 +5,38 @@ List<Vista> vistaFromJson(String str) => List<Vista>.from(json.decode(str).map((
 String vistaToJson(List<Vista> data) => json.encode(List<dynamic>.from(data.map((x) => x.toJson())));
 
 class Vista {
-    int codVista;
-    int codVistaPadre;
-    String direccion;
-    String titulo;
-    dynamic descripcion;
-    dynamic imagen;
-    int esRaiz;
-    int autorizar;
-    int audUsuarioI;
-    int fila;
+    int? codVista;
+    int? codVistaPadre;
+    String? direccion;
+    String? titulo;
+    dynamic? descripcion;
+    dynamic? imagen;
+    int? esRaiz;
+    int? autorizar;
+    int? audUsuarioI;
+    int? fila;
     List<Vista>? items;
-    String label;
-    int tieneHijo;
+    String?label;
+    int? tieneHijo;
     String? routerLink;
     String? icon;
 
     Vista({
-        required this.codVista,
-        required this.codVistaPadre,
-        required this.direccion,
-        required this.titulo,
-        required this.descripcion,
-        required this.imagen,
-        required this.esRaiz,
-        required this.autorizar,
-        required this.audUsuarioI,
-        required this.fila,
-        required this.items,
-        required this.label,
-        required this.tieneHijo,
-        required this.routerLink,
-        required this.icon,
+       this.codVista,
+       this.codVistaPadre,
+       this.direccion,
+       this.titulo,
+       this.descripcion,
+       this.imagen,
+       this.esRaiz,
+       this.autorizar,
+       this.audUsuarioI,
+       this.fila,
+       this.items,
+       this.label,
+       this.tieneHijo,
+       this.routerLink,
+       this.icon,
     });
 
     factory Vista.fromJson(Map<String, dynamic> json) => Vista(

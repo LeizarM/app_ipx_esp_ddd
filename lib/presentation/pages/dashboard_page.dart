@@ -9,14 +9,14 @@ import '../providers/auth_provider.dart';
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
   
-  // Override para asegurar que el widget se considera constante
+  // Override to ensure the widget is considered constant
   @override
   bool operator ==(Object other) {
     return other is DashboardPage && other.runtimeType == runtimeType;
   }
 
   @override
-  int get hashCode => 0; // Un valor constante ya que el widget no tiene propiedades
+  int get hashCode => 0; // A constant value since the widget has no properties
 
   @override
   State<DashboardPage> createState() => _DashboardPageState();
@@ -31,14 +31,14 @@ class _DashboardPageState extends State<DashboardPage> {
   @override
   void initState() {
     super.initState();
-    // Cargar los datos del usuario cuando se inicializa la página, solo si es necesario
+    // Load user data when the page is initialized, only if necessary
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
       if (authProvider.userData == null && !authProvider.isLoading) {
         authProvider.loadUserData();
       }
       
-      // Cargar menú si tenemos el usuario
+      // Load menu if we have the user
       if (authProvider.userData != null) {
         Provider.of<MenuProvider>(context, listen: false)
           .loadMenu(authProvider.userData!.codUsuario);
@@ -54,8 +54,8 @@ class _DashboardPageState extends State<DashboardPage> {
     
     return WillPopScope(
       onWillPop: () async {
-        // No permitir retroceder con el botón de atrás
-        // En su lugar, muestra un diálogo para confirmar salida
+        // Don't allow going back with the back button
+        // Instead, show a dialog to confirm exit
         final shouldExit = await _showExitConfirmationDialog(context);
         return shouldExit ?? false;
       },
@@ -128,13 +128,13 @@ class _DashboardPageState extends State<DashboardPage> {
                     ),
                 ],
               ),
-              // Mostrar loader mientras se carga el menú
+              // Show loader while menu is loading
               if (menuProvider.isLoading)
                 const Padding(
                   padding: EdgeInsets.all(16.0),
                   child: Center(child: CircularProgressIndicator()),
                 ),
-              // Mostrar error si hubo problemas al cargar el menú
+              // Show error if there were problems loading the menu
               if (menuProvider.error != null)
                 Padding(
                   padding: const EdgeInsets.all(16.0),
@@ -153,7 +153,7 @@ class _DashboardPageState extends State<DashboardPage> {
                     ],
                   ),
                 ),
-              // Mostrar menú expandible
+              // Show expandable menu
               if (!menuProvider.isLoading && menuProvider.error == null && menuProvider.menuItems.isNotEmpty)
                 Expanded(
                   child: SingleChildScrollView(
@@ -163,14 +163,14 @@ class _DashboardPageState extends State<DashboardPage> {
                       onItemSelected: (item) {
                         setState(() {
                           _selectedMenuItem = item;
-                          _selectedOption = item.label;
+                          _selectedOption = item.label ?? "Sin título";
                           if (item.routerLink != null) {
                             _currentContent = 'Navegando a: ${item.routerLink}';
                           } else {
-                            _currentContent = 'Sección: ${item.label}';
+                            _currentContent = 'Sección: ${item.label ?? ""}';
                           }
                         });
-                        Navigator.pop(context); // Cerrar drawer
+                        Navigator.pop(context); // Close drawer
                       },
                     ),
                   ),
@@ -186,12 +186,12 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildBody(BuildContext context, AuthProvider authProvider) {
     final userData = authProvider.userData;
     
-    // Si está cargando, mostrar indicador
+    // If loading, show indicator
     if (authProvider.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
     
-    // Si hay un error, mostrar mensaje
+    // If there's an error, show message
     if (authProvider.error != null) {
       return Center(
         child: Column(
@@ -212,20 +212,20 @@ class _DashboardPageState extends State<DashboardPage> {
       );
     }
     
-    // Si no hay datos de usuario, mostrar mensaje
+    // If no user data, show message
     if (userData == null) {
       return const Center(
         child: Text('No se pudieron cargar los datos del usuario'),
       );
     }
     
-    // Si se ha seleccionado un elemento del menú
+    // If a menu item has been selected
     if (_selectedMenuItem != null) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Ícono basado en la sección
+            // Icon based on section
             Icon(_getIconForSection(), size: 60, color: Theme.of(context).primaryColor),
             const SizedBox(height: 16),
             Text(
@@ -248,7 +248,7 @@ class _DashboardPageState extends State<DashboardPage> {
       );
     }
     
-    // Contenido por defecto si no se ha seleccionado nada
+    // Default content if nothing has been selected
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -262,7 +262,7 @@ class _DashboardPageState extends State<DashboardPage> {
           ),
           const SizedBox(height: 24),
           
-          // Tarjetas de información
+          // Information cards
           GridView.count(
             crossAxisCount: 2,
             crossAxisSpacing: 16,
@@ -299,7 +299,7 @@ class _DashboardPageState extends State<DashboardPage> {
           
           const SizedBox(height: 24),
           
-          // Instrucciones
+          // Instructions
           Card(
             elevation: 4,
             child: Padding(
@@ -376,8 +376,8 @@ class _DashboardPageState extends State<DashboardPage> {
   IconData _getIconForSection() {
     if (_selectedMenuItem == null) return Icons.home;
     
-    // Determinar el ícono basado en el nombre de la sección
-    final label = _selectedMenuItem!.label.toLowerCase();
+    // Determine icon based on section name
+    final label = _selectedMenuItem!.label?.toLowerCase() ?? "";
     
     if (label.contains('rrhh') || label.contains('recursos') || label.contains('empleado')) {
       return Icons.people;
@@ -438,24 +438,24 @@ class _DashboardPageState extends State<DashboardPage> {
             TextButton(
               onPressed: () async {
                 try {
-                  // Obtener la referencia al provider de autenticación
+                  // Get reference to authentication provider
                   final authProvider = Provider.of<AuthProvider>(context, listen: false);
                   
-                  // Asegurarnos de cerrar completamente la sesión
+                  // Make sure to completely close the session
                   await authProvider.logout();
                   
                   if (context.mounted) {
-                    // Primero cerrar el diálogo
+                    // First close the dialog
                     Navigator.of(context).pop();
                     
-                    // Reiniciar la aplicación o navegar a login con un enfoque más drástico
+                    // Restart the application or navigate to login with a more drastic approach
                     Navigator.of(context).pushNamedAndRemoveUntil(
                       '/login', 
-                      (_) => false,  // Esto remueve todas las rutas anteriores
+                      (_) => false,  // This removes all previous routes
                     );
                   }
                 } catch (e) {
-                  // Si hay algún error durante el proceso, forzar la navegación al login
+                  // If there's any error during the process, force navigation to login
                   if (context.mounted) {
                     Navigator.of(context).pushAndRemoveUntil(
                       MaterialPageRoute(builder: (context) => const LoginPage()),
