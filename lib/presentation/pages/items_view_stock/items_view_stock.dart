@@ -1,9 +1,13 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
 import '../../providers/auth_provider.dart';
 import 'package:app_ipx_esp_ddd/application/articulo_propuesto/articulo_propuesto_service.dart';
 import 'package:app_ipx_esp_ddd/domain/models/ArticuloPropuesto.dart';
+import 'package:app_ipx_esp_ddd/core/di/service_locator.dart';
+import 'package:app_ipx_esp_ddd/core/utils/token_utils.dart';
+import 'package:app_ipx_esp_ddd/domain/repositories/auth_repository.dart';
 import 'dart:math' as math;
 
 class ItemsViewStock extends StatefulWidget {
@@ -45,19 +49,73 @@ class _ItemsViewStockState extends State<ItemsViewStock> {
     });
     
     try {
+      // Obtener el repositorio de autenticación
+      final authRepository = getIt<AuthRepository>();
+      
+      // Verificar y refrescar el token si es necesario antes de la petición
+      final isTokenValid = await authRepository.refreshTokenIfNeeded();
+
+      debugPrint('Token válido: $isTokenValid');
+
+      if (!isTokenValid) {
+        if (mounted) {
+          _redirectToLogin();
+        }
+        return;
+      }
+      
+      // Continuar con la petición de artículos
       final articuloService = Provider.of<ArticuloService>(context, listen: false);
       final articulos = await articuloService.getArticulosxCity(codCiudad);
       
-      setState(() {
-        _articulos = articulos;
-        _isLoadingArticles = false;
-      });
+      if (mounted) {
+        setState(() {
+          _articulos = articulos;
+          _isLoadingArticles = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _articlesError = e.toString();
-        _isLoadingArticles = false;
-      });
+      // Verificar si es un error de autenticación usando un mejor enfoque
+      if (e is DioError && (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
+        if (mounted) {
+          _redirectToLogin();
+        }
+      } else {
+        // Manejar otros errores normalmente
+        if (mounted) {
+          setState(() {
+            _articlesError = e.toString();
+            _isLoadingArticles = false;
+          });
+        }
+      }
       print('Error cargando artículos: $e');
+    }
+  }
+  
+  // Método para redirigir al login cuando el token ha expirado
+  void _redirectToLogin() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      
+      // Cerrar sesión para limpiar datos y tokens
+      await authProvider.logout();
+      
+      // Usar el navigatorKey global para navegación
+      navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (_) => false);
+      
+      // Mostrar mensaje al usuario usando el contexto del navigatorKey
+      if (navigatorKey.currentContext != null) {
+        ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
+          const SnackBar(
+            content: Text('La sesión ha expirado. Por favor, inicie sesión nuevamente.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error al redireccionar al login: $e');
     }
   }
 
