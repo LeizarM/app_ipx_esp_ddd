@@ -11,6 +11,7 @@ class DashboardPage extends StatefulWidget {
   
   // Override to ensure the widget is considered constant
   @override
+  // ignore: invalid_override_of_non_virtual_member
   bool operator ==(Object other) {
     return other is DashboardPage && other.runtimeType == runtimeType;
   }

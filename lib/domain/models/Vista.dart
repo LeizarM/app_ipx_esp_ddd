@@ -9,8 +9,8 @@ class Vista {
     int? codVistaPadre;
     String? direccion;
     String? titulo;
-    dynamic? descripcion;
-    dynamic? imagen;
+    dynamic descripcion;
+    dynamic imagen;
     int? esRaiz;
     int? autorizar;
     int? audUsuarioI;
