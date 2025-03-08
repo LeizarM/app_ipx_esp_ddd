@@ -1,4 +1,5 @@
 // lib/main.dart
+import 'package:app_ipx_esp_ddd/application/articulo_propuesto/articulo_propuesto_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/di/service_locator.dart';
@@ -6,7 +7,7 @@ import 'presentation/middleware/auth_middleware.dart';
 import 'presentation/pages/login_page.dart';
 import 'presentation/pages/dashboard_page.dart';
 import 'presentation/providers/auth_provider.dart';
-import 'presentation/providers/view_provider.dart';
+import 'presentation/providers/view_provider.dart'; // Importar el servicio de artículos
 import 'dart:async';
 import 'domain/repositories/auth_repository.dart';
 
@@ -97,6 +98,10 @@ class _MyAppState extends State<MyApp> {
         ChangeNotifierProvider(
           key: const ValueKey('menu_provider'),
           create: (_) => MenuProvider(),
+        ),
+        // Añadimos el Provider para ArticuloService
+        Provider<ArticuloService>(
+          create: (_) => getIt<ArticuloService>(),
         ),
       ],
       child: MaterialApp(

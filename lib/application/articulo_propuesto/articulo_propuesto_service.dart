@@ -11,32 +11,28 @@ class ArticuloService {
   
   ArticuloService({required this.dio, required this.authRepository});
   
-  Future<List<ArtciuloPropuesto>> getArticulosxCity( int codCiudad ) async {
-    try {
-      final token = await authRepository.getToken();
-      if (token == null) {
-        throw Exception('No se encontró un token válido');
-      }
-      
-      dio.options.headers["Authorization"] = "Bearer $token";
-      
-      // Construir parámetros de búsqueda
-      Map<String, dynamic> queryParams = {
-        'codCiudad': codCiudad,
-      };
-      
-      
-      
-      final response = await dio.get(
-        '${ApiConstants.baseUrl}/paginaXApp/articulosX',
-        queryParameters: queryParams,
-      );
-      
-      return artciuloPropuestoFromJson(jsonEncode(response.data));
-    } catch (e) {
-      throw Exception('Error al obtener los artículos: ${e.toString()}');
+  Future<List<ArticuloPropuesto>> getArticulosxCity(int codCiudad) async {
+  try {
+    final token = await authRepository.getToken();
+    if (token == null) {
+      throw Exception('No se encontró un token válido');
     }
+    
+    dio.options.headers["Authorization"] = "Bearer $token";
+    
+    // Crear el cuerpo de la solicitud
+    Map<String, dynamic> requestBody = {
+      'codCiudad': codCiudad,
+    };
+    
+    final response = await dio.post(
+      '${ApiConstants.baseUrl}/paginaXApp/articulosX',
+      data: requestBody, // Enviar los datos en el cuerpo, no como queryParameters
+    );
+    
+    return artciuloPropuestoFromJson(jsonEncode(response.data));
+  } catch (e) {
+    throw Exception('Error al obtener los artículos: ${e.toString()}');
   }
-  
-  
+}
 }

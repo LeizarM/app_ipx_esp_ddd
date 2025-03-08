@@ -1,17 +1,17 @@
 // To parse this JSON data, do
 import 'dart:convert';
 
-List<ArtciuloPropuesto> artciuloPropuestoFromJson(String str) => List<ArtciuloPropuesto>.from(json.decode(str).map((x) => ArtciuloPropuesto.fromJson(x)));
+List<ArticuloPropuesto> artciuloPropuestoFromJson(String str) => List<ArticuloPropuesto>.from(json.decode(str).map((x) => ArticuloPropuesto.fromJson(x)));
 
-String artciuloPropuestoToJson(List<ArtciuloPropuesto> data) => json.encode(List<dynamic>.from(data.map((x) => x.toJson())));
+String artciuloPropuestoToJson(List<ArticuloPropuesto> data) => json.encode(List<dynamic>.from(data.map((x) => x.toJson())));
 
-class ArtciuloPropuesto {
+class ArticuloPropuesto {
     String? codArticulo;
     String? datoArt;
     int? listaPrecio;
     double? precio;
     String? moneda;
-    int? gramaje;
+    double? gramaje;
     int? codigoFamilia;
     int? disponible;
     String? unidadMedida;
@@ -20,13 +20,13 @@ class ArtciuloPropuesto {
     String? ruta;
     int? audUsuario;
     String? db;
-    dynamic whsCode;
-    dynamic whsName;
+    String? whsCode;
+    String? whsName;
     String? condicionPrecio;
-    dynamic ciudad;
+    int? ciudad;
     double? utm;
 
-    ArtciuloPropuesto({
+    ArticuloPropuesto({
         this.codArticulo,
         this.datoArt,
         this.listaPrecio,
@@ -48,7 +48,7 @@ class ArtciuloPropuesto {
         this.utm,
     });
 
-    factory ArtciuloPropuesto.fromJson(Map<String, dynamic> json) => ArtciuloPropuesto(
+    factory ArticuloPropuesto.fromJson(Map<String, dynamic> json) => ArticuloPropuesto(
         codArticulo: json["codArticulo"],
         datoArt: json["datoArt"],
         listaPrecio: json["listaPrecio"],
