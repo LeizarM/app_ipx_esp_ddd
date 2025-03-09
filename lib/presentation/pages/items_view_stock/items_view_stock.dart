@@ -2,13 +2,14 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../providers/auth_provider.dart';
 import 'package:app_ipx_esp_ddd/application/articulo_propuesto/articulo_propuesto_service.dart';
 import 'package:app_ipx_esp_ddd/domain/models/ArticuloPropuesto.dart';
 import 'package:app_ipx_esp_ddd/core/di/service_locator.dart';
-import 'package:app_ipx_esp_ddd/core/utils/token_utils.dart';
 import 'package:app_ipx_esp_ddd/domain/repositories/auth_repository.dart';
 import 'dart:math' as math;
+import 'package:intl/intl.dart';
 
 class ItemsViewStock extends StatefulWidget {
   const ItemsViewStock({super.key});
@@ -20,29 +21,99 @@ class ItemsViewStock extends StatefulWidget {
 class _ItemsViewStockState extends State<ItemsViewStock> {
   bool _isLoadingArticles = false;
   List<ArticuloPropuesto> _articulos = [];
+  List<ArticuloPropuesto> _displayedArticulos = []; // Artículos actualmente mostrados
   String? _articlesError;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  DateTime? _lastUpdateTime;
+  bool _loadedFromCache = false;
+  
+  // Paginación
+  static const int _pageSize = 50;
+  bool _isLoadingMore = false;
+  final ScrollController _scrollController = ScrollController();
+  
+  // Claves para SharedPreferences
+  static const String _firstLoadKey = 'first_load_items_view';
   
   @override
   void initState() {
     super.initState();
-    // Cargar datos de usuario cuando se inicializa la página, si es necesario
+    
+    // Configurar controlador de scroll
+    _scrollController.addListener(_scrollListener);
+    
+    // Iniciar carga cuando se monta el widget
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      if (authProvider.userData == null && !authProvider.isLoading) {
-        authProvider.loadUserData();
-      }
+      _initialLoad();
+    });
+  }
+  
+  // Detectar cuando el usuario llega al final de la lista
+  void _scrollListener() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      // Cuando estamos cerca del final, cargar más artículos
+      _loadMoreItems();
+    }
+  }
+  
+  // Carga inicial
+  Future<void> _initialLoad() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    
+    // Cargar datos de usuario si es necesario
+    if (authProvider.userData == null && !authProvider.isLoading) {
+      await authProvider.loadUserData();
+    }
+    
+    // Si tenemos usuario, cargar artículos
+    if (authProvider.userData != null) {
+      // Verificar si es la primera vez que se abre esta pantalla
+      final prefs = await SharedPreferences.getInstance();
+      final isFirstLoad = !(prefs.getBool(_firstLoadKey) ?? false);
       
-      // Cargar artículos una vez que los datos del usuario estén disponibles
-      if (authProvider.userData != null) {
-        _loadArticulos(authProvider.userData!.codCiudad);
+      // Si es primera carga o no tenemos datos en caché, cargar de API
+      await _loadArticulos(
+        authProvider.userData!.codCiudad, 
+        forceRefresh: isFirstLoad
+      );
+      
+      // Marcar que ya no es primera carga
+      if (isFirstLoad) {
+        await prefs.setBool(_firstLoadKey, true);
+      }
+    }
+  }
+  
+  // Cargar más artículos (para paginación)
+  void _loadMoreItems() {
+    if (_isLoadingMore || _displayedArticulos.length >= _articulos.length) {
+      return;
+    }
+    
+    setState(() {
+      _isLoadingMore = true;
+    });
+    
+    // Calcular cuántos artículos más cargar
+    final int startIndex = _displayedArticulos.length;
+    final int endIndex = math.min(startIndex + _pageSize, _articulos.length);
+    
+    // Simular un pequeño retraso para no bloquear la UI
+    Future.delayed(const Duration(milliseconds: 50), () {
+      if (mounted) {
+        setState(() {
+          _displayedArticulos.addAll(_articulos.sublist(startIndex, endIndex));
+          _isLoadingMore = false;
+        });
       }
     });
   }
   
   // Cargar artículos usando el codCiudad del usuario
-  Future<void> _loadArticulos(int codCiudad) async {
+  Future<void> _loadArticulos(int codCiudad, {bool forceRefresh = false}) async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoadingArticles = true;
       _articlesError = null;
@@ -55,8 +126,6 @@ class _ItemsViewStockState extends State<ItemsViewStock> {
       // Verificar y refrescar el token si es necesario antes de la petición
       final isTokenValid = await authRepository.refreshTokenIfNeeded();
 
-      debugPrint('Token válido: $isTokenValid');
-
       if (!isTokenValid) {
         if (mounted) {
           _redirectToLogin();
@@ -66,17 +135,34 @@ class _ItemsViewStockState extends State<ItemsViewStock> {
       
       // Continuar con la petición de artículos
       final articuloService = Provider.of<ArticuloService>(context, listen: false);
-      final articulos = await articuloService.getArticulosxCity(codCiudad);
+      
+      // Obtener la última fecha de actualización antes de cargar los artículos
+      final lastUpdateBefore = await articuloService.getLastUpdateTime(codCiudad);
+      
+      // Cargar artículos (desde caché o API según forceRefresh)
+      final articulos = await articuloService.getArticulosxCity(codCiudad, forceRefresh: forceRefresh);
+      
+      // Obtener la última fecha de actualización después de cargar artículos
+      final lastUpdateAfter = await articuloService.getLastUpdateTime(codCiudad);
+      
+      // Determinar si se cargó desde caché o desde API
+      final loadedFromCache = lastUpdateBefore != null && 
+                             lastUpdateAfter != null && 
+                             lastUpdateBefore.millisecondsSinceEpoch == lastUpdateAfter.millisecondsSinceEpoch;
       
       if (mounted) {
         setState(() {
           _articulos = articulos;
+          // Inicializar con los primeros elementos para carga rápida
+          _displayedArticulos = articulos.take(_pageSize).toList();
           _isLoadingArticles = false;
+          _lastUpdateTime = lastUpdateAfter;
+          _loadedFromCache = loadedFromCache;
         });
       }
     } catch (e) {
-      // Verificar si es un error de autenticación usando un mejor enfoque
-      if (e is DioError && (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
+      // Verificar si es un error de autenticación
+      if (e is DioException && (e.response?.statusCode == 401 || e.response?.statusCode == 403)) {
         if (mounted) {
           _redirectToLogin();
         }
@@ -89,7 +175,7 @@ class _ItemsViewStockState extends State<ItemsViewStock> {
           });
         }
       }
-      print('Error cargando artículos: $e');
+      debugPrint('Error cargando artículos: $e');
     }
   }
   
@@ -104,7 +190,7 @@ class _ItemsViewStockState extends State<ItemsViewStock> {
       // Usar el navigatorKey global para navegación
       navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (_) => false);
       
-      // Mostrar mensaje al usuario usando el contexto del navigatorKey
+      // Mostrar mensaje al usuario
       if (navigatorKey.currentContext != null) {
         ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
           const SnackBar(
@@ -115,8 +201,29 @@ class _ItemsViewStockState extends State<ItemsViewStock> {
         );
       }
     } catch (e) {
-      print('Error al redireccionar al login: $e');
+      debugPrint('Error al redireccionar al login: $e');
     }
+  }
+
+  // Aplicar filtro de búsqueda
+  void _applySearchFilter(String query) {
+    setState(() {
+      _searchQuery = query;
+      
+      if (query.isEmpty) {
+        // Si no hay búsqueda, mostrar solo los primeros elementos
+        _displayedArticulos = _articulos.take(_pageSize).toList();
+      } else {
+        // Si hay búsqueda, filtrar todos los artículos
+        final queryLower = query.toLowerCase();
+        _displayedArticulos = _articulos.where((articulo) {
+          final codArticulo = articulo.codArticulo?.toString() ?? '';
+          final datoArt = articulo.datoArt?.toString() ?? '';
+          return codArticulo.toLowerCase().contains(queryLower) || 
+                 datoArt.toLowerCase().contains(queryLower);
+        }).take(100).toList(); // Limitar resultados de búsqueda para mejor rendimiento
+      }
+    });
   }
 
   @override
@@ -145,8 +252,8 @@ class _ItemsViewStockState extends State<ItemsViewStock> {
           if (userData != null)
             IconButton(
               icon: const Icon(Icons.refresh),
-              onPressed: () => _loadArticulos(userData.codCiudad),
-              tooltip: 'Actualizar listado',
+              onPressed: () => _loadArticulos(userData.codCiudad, forceRefresh: true),
+              tooltip: 'Actualizar desde servidor',
             ),
         ],
         bottom: PreferredSize(
@@ -169,18 +276,12 @@ class _ItemsViewStockState extends State<ItemsViewStock> {
                       icon: const Icon(Icons.clear),
                       onPressed: () {
                         _searchController.clear();
-                        setState(() {
-                          _searchQuery = '';
-                        });
+                        _applySearchFilter('');
                       },
                     )
                   : null,
               ),
-              onChanged: (value) {
-                setState(() {
-                  _searchQuery = value;
-                });
-              },
+              onChanged: _applySearchFilter,
             ),
           ),
         ),
@@ -196,9 +297,47 @@ class _ItemsViewStockState extends State<ItemsViewStock> {
             ],
           ),
         ),
-        child: _buildBody(context, authProvider),
+        child: Column(
+          children: [
+            if (_lastUpdateTime != null)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 16),
+                color: _loadedFromCache ? Colors.amber.shade100 : Colors.green.shade100,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _loadedFromCache ? Icons.storage : Icons.cloud_done, 
+                      size: 14, 
+                      color: _loadedFromCache ? Colors.amber.shade800 : Colors.green.shade800
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      _loadedFromCache
+                          ? 'Datos desde caché local: ${_formatDateTime(_lastUpdateTime!)}'
+                          : 'Actualizado: ${_formatDateTime(_lastUpdateTime!)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _loadedFromCache ? Colors.amber.shade800 : Colors.green.shade800,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            Expanded(
+              child: _buildBody(context, authProvider),
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  // Formatear fecha y hora para mostrar
+  String _formatDateTime(DateTime dateTime) {
+    final formatter = DateFormat('dd/MM/yyyy HH:mm');
+    return formatter.format(dateTime);
   }
 
   Widget _buildBody(BuildContext context, AuthProvider authProvider) {
@@ -231,8 +370,8 @@ class _ItemsViewStockState extends State<ItemsViewStock> {
       _loadArticulos(userData.codCiudad);
     }
     
-    // Si se están cargando artículos, mostrar indicador
-    if (_isLoadingArticles) {
+    // Si se están cargando artículos inicialmente, mostrar indicador
+    if (_isLoadingArticles && _articulos.isEmpty) {
       return const Center(child: CircularProgressIndicator());
     }
     
@@ -251,7 +390,24 @@ class _ItemsViewStockState extends State<ItemsViewStock> {
       );
     }
     
-    // Mostrar artículos
+    // Si no hay resultados para la búsqueda
+    if (_displayedArticulos.isEmpty && _searchQuery.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_off, size: 80, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No se encontraron artículos para "$_searchQuery"',
+              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // Mostrar artículos con paginación
     return _buildArticulosList();
   }
   
@@ -285,10 +441,10 @@ class _ItemsViewStockState extends State<ItemsViewStock> {
   }
   
   Widget _buildArticulosList() {
-    // Agrupar artículos por codArticulo y datoArt
+    // Agrupar artículos por codArticulo y datoArt (solo para los que se muestran)
     Map<String, List<ArticuloPropuesto>> groupedArticulos = {};
     
-    for (var articulo in _articulos) {
+    for (var articulo in _displayedArticulos) {
       final String datoArt = articulo.datoArt ?? "sin_dato";
       String key = '${articulo.codArticulo}_$datoArt';
       if (!groupedArticulos.containsKey(key)) {
@@ -297,310 +453,330 @@ class _ItemsViewStockState extends State<ItemsViewStock> {
       groupedArticulos[key]!.add(articulo);
     }
 
-    // Filtrar por búsqueda si hay consulta
-    List<String> filteredKeys = groupedArticulos.keys.where((key) {
-      var items = groupedArticulos[key]!;
-      return items.any((item) => 
-        (item.datoArt ?? '').toLowerCase().contains(_searchQuery.toLowerCase()) ||
-        (item.codArticulo?.toString() ?? '').contains(_searchQuery.toLowerCase()));
-    }).toList();
-
-    if (filteredKeys.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.search_off, size: 80, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              'No se encontraron artículos',
-              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(10.0),
-      itemCount: filteredKeys.length,
-      itemBuilder: (context, index) {
-        String key = filteredKeys[index];
-        List<ArticuloPropuesto> articulosList = groupedArticulos[key]!;
-        ArticuloPropuesto firstArticulo = articulosList.first;
-        
-        // Generar un color consistente basado en el código
-        final int colorValue = firstArticulo.codArticulo?.hashCode ?? 0;
-        final Color cardColor = Color((math.Random(colorValue).nextDouble() * 0xFFFFFF).toInt()).withOpacity(0.2);
-        
-        // Agrupar por DB y Ciudad para mostrar precios organizados
-        Map<String, Map<int, List<ArticuloPropuesto>>> dbCiudadPrecios = {};
-        
-        for (var art in articulosList) {
-          final String db = art.db ?? "Sin DB";
-          final int ciudad = art.codCiudad ?? 0;
-          
-          if (!dbCiudadPrecios.containsKey(db)) {
-            dbCiudadPrecios[db] = {};
-          }
-          
-          if (!dbCiudadPrecios[db]!.containsKey(ciudad)) {
-            dbCiudadPrecios[db]![ciudad] = [];
-          }
-          
-          dbCiudadPrecios[db]![ciudad]!.add(art);
-        }
-        
-        return Card(
-          margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
-          elevation: 3,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12.0),
-            side: BorderSide(color: Theme.of(context).primaryColor.withOpacity(0.2), width: 1),
-          ),
-          child: ExpansionTile(
-            leading: CircleAvatar(
-              backgroundColor: cardColor,
-              child: Text(
-                firstArticulo.codArticulo?.toString().substring(0, 1) ?? "?",
-                style: TextStyle(
-                  color: cardColor.computeLuminance() > 0.5 ? Colors.black : Colors.white,
-                  fontWeight: FontWeight.bold,
+    // Convertir a lista ordenada para ListView
+    final List<MapEntry<String, List<ArticuloPropuesto>>> groupedList = 
+        groupedArticulos.entries.toList();
+    
+    return Stack(
+      children: [
+        ListView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.all(10.0),
+          itemCount: groupedList.length + (_isLoadingMore ? 1 : 0),
+          itemBuilder: (context, index) {
+            // Mostrar indicador de carga al final
+            if (_isLoadingMore && index == groupedList.length) {
+              return const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: CircularProgressIndicator(),
                 ),
+              );
+            }
+            
+            final entry = groupedList[index];
+            final List<ArticuloPropuesto> articulosList = entry.value;
+            final ArticuloPropuesto firstArticulo = articulosList.first;
+            
+            // Generar un color consistente basado en el código
+            final int colorValue = firstArticulo.codArticulo?.hashCode ?? 0;
+            final Color cardColor = Color((math.Random(colorValue).nextDouble() * 0xFFFFFF).toInt()).withOpacity(0.2);
+            
+            // Agrupar por DB y Ciudad para mostrar precios organizados
+            Map<String, Map<int, List<ArticuloPropuesto>>> dbCiudadPrecios = {};
+            
+            for (var art in articulosList) {
+              final String db = art.db ?? "Sin DB";
+              final int ciudad = art.codCiudad ?? 0;
+              
+              if (!dbCiudadPrecios.containsKey(db)) {
+                dbCiudadPrecios[db] = {};
+              }
+              
+              if (!dbCiudadPrecios[db]!.containsKey(ciudad)) {
+                dbCiudadPrecios[db]![ciudad] = [];
+              }
+              
+              dbCiudadPrecios[db]![ciudad]!.add(art);
+            }
+            
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+              elevation: 3,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12.0),
+                side: BorderSide(color: Theme.of(context).primaryColor.withOpacity(0.2), width: 1),
               ),
-            ),
-            title: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        firstArticulo.datoArt ?? 'Sin nombre',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+              child: ExpansionTile(
+                leading: CircleAvatar(
+                  backgroundColor: cardColor,
+                  child: Text(
+                    firstArticulo.codArticulo?.toString().substring(0, 1) ?? "?",
+                    style: TextStyle(
+                      color: cardColor.computeLuminance() > 0.5 ? Colors.black : Colors.white,
+                      fontWeight: FontWeight.bold,
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.copy, size: 18),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      tooltip: 'Copiar descripción',
-                      onPressed: () {
-                        _copyToClipboard(
-                          context,
-                          firstArticulo.datoArt ?? '',
-                          'Descripción copiada'
-                        );
-                      },
+                  ),
+                ),
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            firstArticulo.datoArt ?? 'Sin nombre',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.copy, size: 18),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          tooltip: 'Copiar descripción',
+                          onPressed: () {
+                            _copyToClipboard(
+                              context,
+                              firstArticulo.datoArt ?? '',
+                              'Descripción copiada'
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).primaryColor.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(4),
+                        border: Border.all(
+                          color: Theme.of(context).primaryColor.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.qr_code_scanner, 
+                            size: 14,
+                            color: Theme.of(context).primaryColor),
+                          const SizedBox(width: 4),
+                          Flexible(
+                            child: SelectableText(
+                              '${firstArticulo.codArticulo}',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 12,
+                                color: Theme.of(context).primaryColor,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          InkWell(
+                            onTap: () {
+                              _copyToClipboard(
+                                context,
+                                firstArticulo.codArticulo?.toString() ?? '',
+                                'Código copiado'
+                              );
+                            },
+                            child: const Icon(Icons.content_copy, size: 12),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
-                Container(
-                  margin: const EdgeInsets.only(top: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).primaryColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: Theme.of(context).primaryColor.withOpacity(0.3),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.qr_code_scanner, 
-                        size: 14, // Reducido de 16 a 14
-                        color: Theme.of(context).primaryColor),
-                      const SizedBox(width: 4),
-                      Flexible( // Añadido Flexible aquí
-                        child: SelectableText(
-                          '${firstArticulo.codArticulo}',
-                          style: TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12, // Reducido el tamaño de fuente
-                            color: Theme.of(context).primaryColor,
-                          ),
+                subtitle: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: firstArticulo.disponible != null && firstArticulo.disponible! > 0
+                            ? Colors.green.shade100
+                            : Colors.red.shade100,
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        firstArticulo.disponible != null && firstArticulo.disponible! > 0
+                            ? 'Disponible'
+                            : 'Sin stock',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: firstArticulo.disponible != null && firstArticulo.disponible! > 0
+                              ? Colors.green.shade800
+                              : Colors.red.shade800,
                         ),
                       ),
-                      const SizedBox(width: 4),
-                      InkWell(
-                        onTap: () {
-                          _copyToClipboard(
-                            context,
-                            firstArticulo.codArticulo?.toString() ?? '',
-                            'Código copiado'
-                          );
-                        },
-                        child: const Icon(Icons.content_copy, size: 12), // Reducido de 14 a 12
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            subtitle: Row(
-              children: [
-                // Reemplazar el código anterior del subtítulo con este para solo mostrar el indicador de disponibilidad
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: firstArticulo.disponible != null && firstArticulo.disponible! > 0
-                        ? Colors.green.shade100
-                        : Colors.red.shade100,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    firstArticulo.disponible != null && firstArticulo.disponible! > 0
-                        ? 'Disponible'
-                        : 'Sin stock',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: firstArticulo.disponible != null && firstArticulo.disponible! > 0
-                          ? Colors.green.shade800
-                          : Colors.red.shade800,
                     ),
-                  ),
+                  ],
                 ),
-              ],
-            ),
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16.0),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: const BorderRadius.only(
-                    bottomLeft: Radius.circular(12.0),
-                    bottomRight: Radius.circular(12.0),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Detalles del producto
-                    _buildProductDetails(firstArticulo),
-                    const Divider(thickness: 1),
-                    
-                    // Lista de precios por DB y Ciudad
-                    ...dbCiudadPrecios.entries.map((dbEntry) => Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16.0),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade50,
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(12.0),
+                        bottomRight: Radius.circular(12.0),
+                      ),
+                    ),
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Container(
-                          margin: const EdgeInsets.only(top: 16, bottom: 8),
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: dbEntry.key == "ESP" 
-                                ? Colors.blue.shade100 
-                                : Colors.purple.shade100,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Text(
-                            'Base de datos: ${dbEntry.key}',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: dbEntry.key == "ESP" 
-                                  ? Colors.blue.shade800 
-                                  : Colors.purple.shade800,
-                            ),
-                          ),
-                        ),
-                        ...dbEntry.value.entries.map((ciudadEntry) => Column(
+                        // Detalles del producto
+                        _buildProductDetails(firstArticulo),
+                        const Divider(thickness: 1),
+                        
+                        // Lista de precios por DB y Ciudad
+                        ...dbCiudadPrecios.entries.map((dbEntry) => Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 8.0),
-                              child: Row(
-                                children: [
-                                  Icon(Icons.location_city, 
-                                    size: 16, 
-                                    color: Theme.of(context).primaryColor),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Ciudad: ${ciudadEntry.key}', 
-                                    style: const TextStyle(fontWeight: FontWeight.w500),
-                                  ),
-                                ],
+                            Container(
+                              margin: const EdgeInsets.only(top: 16, bottom: 8),
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: dbEntry.key == "ESP" 
+                                    ? Colors.blue.shade100 
+                                    : Colors.purple.shade100,
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                'Base de datos: ${dbEntry.key}',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: dbEntry.key == "ESP" 
+                                      ? Colors.blue.shade800 
+                                      : Colors.purple.shade800,
+                                ),
                               ),
                             ),
-                            ...ciudadEntry.value.map((art) => Container(
-                              margin: const EdgeInsets.only(bottom: 8, left: 8),
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(8),
-                                color: Colors.white,
-                              ),
-                              child: Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Expanded(
-                                    flex: 2,
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Row(
+                            ...dbEntry.value.entries.map((ciudadEntry) => Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 8.0),
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.location_city, 
+                                        size: 16, 
+                                        color: Theme.of(context).primaryColor),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Ciudad: ${ciudadEntry.key}', 
+                                        style: const TextStyle(fontWeight: FontWeight.w500),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                ...ciudadEntry.value.map((art) => Container(
+                                  margin: const EdgeInsets.only(bottom: 8, left: 8),
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(
+                                    border: Border.all(color: Colors.grey.shade300),
+                                    borderRadius: BorderRadius.circular(8),
+                                    color: Colors.white,
+                                  ),
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Expanded(
+                                        flex: 2,
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
-                                            Icon(Icons.list_alt, size: 16, color: Colors.grey[600]),
-                                            const SizedBox(width: 4),
-                                            Text('Lista: ${art.listaPrecio ?? "N/A"}'),
+                                            Row(
+                                              children: [
+                                                Icon(Icons.list_alt, size: 16, color: Colors.grey[600]),
+                                                const SizedBox(width: 4),
+                                                Text('Lista: ${art.listaPrecio ?? "N/A"}'),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                              decoration: BoxDecoration(
+                                                color: Colors.grey.shade100,
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                art.condicionPrecio ?? 'Sin condición',
+                                                style: TextStyle(
+                                                  fontWeight: FontWeight.w500,
+                                                  color: Colors.grey[800],
+                                                ),
+                                              ),
+                                            ),
                                           ],
                                         ),
-                                        const SizedBox(height: 4),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      ),
+                                      Expanded(
+                                        flex: 1,
+                                        child: Container(
+                                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
                                           decoration: BoxDecoration(
-                                            color: Colors.grey.shade100,
-                                            borderRadius: BorderRadius.circular(4),
+                                            color: Theme.of(context).primaryColor.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(8),
                                           ),
                                           child: Text(
-                                            art.condicionPrecio ?? 'Sin condición',
+                                            '\$${art.precio?.toStringAsFixed(2) ?? "0.00"}',
                                             style: TextStyle(
-                                              fontWeight: FontWeight.w500,
-                                              color: Colors.grey[800],
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 18,
+                                              color: Theme.of(context).primaryColor,
                                             ),
+                                            textAlign: TextAlign.center,
                                           ),
                                         ),
-                                      ],
-                                    ),
-                                  ),
-                                  Expanded(
-                                    flex: 1,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                                      decoration: BoxDecoration(
-                                        color: Theme.of(context).primaryColor.withOpacity(0.1),
-                                        borderRadius: BorderRadius.circular(8),
                                       ),
-                                      child: Text(
-                                        '\$${art.precio?.toStringAsFixed(2) ?? "0.00"}',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                          fontSize: 18,
-                                          color: Theme.of(context).primaryColor,
-                                        ),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ),
+                                    ],
                                   ),
-                                ],
-                              ),
-                            )),
+                                )),
+                              ],
+                            )).toList(),
                           ],
                         )).toList(),
                       ],
-                    )).toList(),
-                  ],
-                ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            );
+          },
+        ),
+        
+        // Recargar artículos mientras se desplaza hacia abajo
+        if (_isLoadingArticles && _articulos.isNotEmpty)
+          Positioned(
+            top: 20,
+            right: 20,
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(30),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 8,
+                    offset: const Offset(0, 2),
+                  )
+                ]
+              ),
+              child: const SizedBox(
+                height: 25,
+                width: 25,
+                child: CircularProgressIndicator(strokeWidth: 3),
+              ),
+            ),
           ),
-        );
-      },
+      ],
     );
   }
   
@@ -692,6 +868,7 @@ class _ItemsViewStockState extends State<ItemsViewStock> {
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 }
